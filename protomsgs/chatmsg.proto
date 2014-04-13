@@ -1,0 +1,9 @@
+package protomsgs;
+
+// 聊天消息
+message ChatMsg
+{
+	required string SenderName = 1;
+	required string Msg = 2;
+	required int64 Timestamp = 3;
+}
