@@ -130,16 +130,22 @@ func (this *Server) handleClientConn(conn *net.TCPConn) {
 			buf = append(buf, request[:readSize]...)
 			bufLen += uint32(readSize)
 
-			if bufLen >= 6 {
-				pacLen := utils.BytesToUint32(buf[0:4])
-				if bufLen >= pacLen {
-					receivePackets <- &packet.Packet{
-						Len:  pacLen,
-						Type: utils.BytesToUint16(buf[4:6]),
-						Data: buf[6:pacLen],
+			for {
+				if bufLen >= 6 {
+					pacLen := utils.BytesToUint32(buf[0:4])
+					if bufLen >= pacLen {
+						receivePackets <- &packet.Packet{
+							Len:  pacLen,
+							Type: utils.BytesToUint16(buf[4:6]),
+							Data: buf[6:pacLen],
+						}
+						buf = buf[pacLen:]
+						bufLen -= pacLen
+					} else {
+						break
 					}
-					bufLen -= pacLen
-					buf = buf[:bufLen]
+				} else {
+					break
 				}
 			}
 
