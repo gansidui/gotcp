@@ -16,3 +16,6 @@
 另外golang现在的GC很慢，非常慢，客户端断开连接后，服务器需要等很久才
 
 释放socket占用的内存。
+
+
+####下面这个chatserver是在gotcp的基础上写的，已经用于生产环境：https://github.com/gansidui/chatserver
