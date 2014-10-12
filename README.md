@@ -44,6 +44,7 @@ func main() {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
+<<<<<<< HEAD
 	svr := gotcp.NewServer(config, callbacks)
 	go svr.Start(listener)
 
@@ -80,3 +81,9 @@ Run server
 ~~~
 go run server.go
 ~~~
+=======
+释放socket占用的内存。
+
+
+####下面这个chatserver是在gotcp的基础上写的，已经用于生产环境：https://github.com/gansidui/chatserver
+>>>>>>> 9ca583c7c52c9f1f0c58403eef8dc93272d545d5
