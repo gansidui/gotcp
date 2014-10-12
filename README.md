@@ -1,11 +1,11 @@
-Gotcp is a powerful package for quickly writing tcp applications/services in golang
+Gotcp is a powerful package for quickly writing tcp applications/services in golang.
 
-Install the gotcp package
+Install the gotcp package:
 ~~~
 go get github.com/gansidui/gotcp
 ~~~
 
-Create server.go file
+Create server.go file:
 ~~~ go
 package main
 
@@ -44,7 +44,6 @@ func main() {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
-<<<<<<< HEAD
 	svr := gotcp.NewServer(config, callbacks)
 	go svr.Start(listener)
 
@@ -77,13 +76,8 @@ func onReceivePacket(conn *net.TCPConn, pac *gotcp.Packet) error {
 }
 ~~~
 
-Run server
+Run server:
 ~~~
 go run server.go
 ~~~
-=======
-释放socket占用的内存。
 
-
-####下面这个chatserver是在gotcp的基础上写的，已经用于生产环境：https://github.com/gansidui/chatserver
->>>>>>> 9ca583c7c52c9f1f0c58403eef8dc93272d545d5
