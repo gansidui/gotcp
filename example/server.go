@@ -1,12 +1,3 @@
-Gotcp is a powerful package for quickly writing tcp applications/services in golang
-
-Install the gotcp package
-~~~
-go get github.com/gansidui/gotcp
-~~~
-
-Create server.go file
-~~~ go
 package main
 
 import (
@@ -47,12 +38,22 @@ func main() {
 	svr := gotcp.NewServer(config, callbacks)
 	go svr.Start(listener)
 
+	go func() {
+		for {
+			fmt.Println("=======num goroutine === ", runtime.NumGoroutine())
+			fmt.Println(onConnectNum, onDisconnectNum, onReceivePacketNum)
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
 	ch := make(chan os.Signal)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	log.Printf("Signal: %v\r\n", <-ch)
 
 	svr.Stop()
 }
+
+var onConnectNum, onDisconnectNum, onReceivePacketNum int
 
 func checkError(err error) {
 	if err != nil {
@@ -61,22 +62,19 @@ func checkError(err error) {
 }
 
 func onConnect(conn *net.TCPConn) error {
+	onConnectNum++
 	fmt.Println("onConnect", conn.RemoteAddr())
 	return nil
 }
 
 func onDisconnect(conn *net.TCPConn) {
+	onDisconnectNum++
 	fmt.Println("onDisconnect", conn.RemoteAddr())
 }
 
 func onReceivePacket(conn *net.TCPConn, pac *gotcp.Packet) error {
+	onReceivePacketNum++
 	fmt.Println("onReceivePacket", conn.RemoteAddr())
 	fmt.Println(pac.GetLen(), pac.GetType(), string(pac.GetData()))
 	return nil
 }
-~~~
-
-Run server
-~~~
-go run server.go
-~~~
