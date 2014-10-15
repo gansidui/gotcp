@@ -18,16 +18,21 @@ func main() {
 				log.Fatal(err)
 			}
 
-			pac := gotcp.NewPacket(211314, []byte("hello world"))
-			conn.Write(pac.Serialize())
-			conn.Close()
+			fmt.Println("connect  ====== ", j)
 
-			fmt.Println("j====", j)
+			ticker := time.NewTicker(10 * time.Second)
+			for _ = range ticker.C {
+				pac := gotcp.NewPacket(211314, []byte("hello world"))
+				conn.Write(pac.Serialize())
+			}
+
+			conn.Close()
+			fmt.Println("disconnect  ****** ", j)
 
 		}(j)
 
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	time.Sleep(30 * time.Second)
+	time.Sleep(5 * time.Minute)
 }
