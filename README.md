@@ -21,30 +21,45 @@ import (
 	"time"
 )
 
+type ConnDelegate struct{}
+
+func (this *ConnDelegate) OnConnect(c *gotcp.Conn) bool {
+	fmt.Println("OnConnect")
+	return true
+}
+
+func (this *ConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
+	fmt.Println("OnMessage:", p.GetLen(), p.GetType(), string(p.GetData()))
+	return true
+}
+
+func (this *ConnDelegate) OnClose(c *gotcp.Conn) {
+	fmt.Println("OnClose")
+}
+
+func (this *ConnDelegate) OnIOError(c *gotcp.Conn, err error) {
+	fmt.Println("OnIOError:", err)
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	config := &gotcp.Config{
-		AcceptTimeout:  30 * time.Second,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		MaxPacLen:      uint32(1024),
-		RecPacBufLimit: uint32(20),
-	}
-
-	callbacks := &gotcp.Callbacks{
-		OnConnect:       onConnect,
-		OnDisconnect:    onDisconnect,
-		OnReceivePacket: onReceivePacket,
-	}
-
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
 	checkError(err)
-
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
-	svr := gotcp.NewServer(config, callbacks)
+	config := &gotcp.Config{
+		AcceptTimeout:          5 * time.Second,
+		ReadTimeout:            5 * time.Second,
+		WriteTimeout:           5 * time.Second,
+		MaxPacketLength:        int32(2048),
+		SendPacketChanLimit:    int32(10),
+		ReceivePacketChanLimit: int32(10),
+	}
+
+	delegate := &ConnDelegate{}
+	svr := gotcp.NewServer(config, delegate)
 	go svr.Start(listener)
 
 	ch := make(chan os.Signal)
@@ -60,20 +75,6 @@ func checkError(err error) {
 	}
 }
 
-func onConnect(conn *net.TCPConn) error {
-	fmt.Println("onConnect", conn.RemoteAddr())
-	return nil
-}
-
-func onDisconnect(conn *net.TCPConn) {
-	fmt.Println("onDisconnect", conn.RemoteAddr())
-}
-
-func onReceivePacket(conn *net.TCPConn, pac *gotcp.Packet) error {
-	fmt.Println("onReceivePacket", conn.RemoteAddr())
-	fmt.Println(pac.GetLen(), pac.GetType(), string(pac.GetData()))
-	return nil
-}
 ~~~
 
 Run server:

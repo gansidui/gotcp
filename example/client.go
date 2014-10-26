@@ -12,21 +12,29 @@ func main() {
 	for j := 0; j < 100; j++ {
 
 		go func(j int) {
-			tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
-			conn, err := net.DialTCP("tcp", nil, tcpAddr)
+			conn, err := connect()
 			if err != nil {
 				log.Fatal(err)
 			}
+			defer conn.Close()
 
 			fmt.Println("connect  ====== ", j)
 
-			ticker := time.NewTicker(10 * time.Second)
+			conn.Write(gotcp.NewPacket(88, []byte("hi")).Serialize())
+
+			ticker := time.NewTicker(3 * time.Second)
 			for _ = range ticker.C {
-				pac := gotcp.NewPacket(211314, []byte("hello world"))
-				conn.Write(pac.Serialize())
+				conn.Write(gotcp.NewPacket(211314, []byte("hello world")).Serialize())
+
+				if pac, err := gotcp.ReadPacket(conn, 2048); err == nil {
+					fmt.Println(pac.GetLen(), pac.GetType(), string(pac.GetData()))
+				}
+
+				if pac, err := gotcp.ReadPacket(conn, 2048); err == nil {
+					fmt.Println(pac.GetLen(), pac.GetType(), string(pac.GetData()))
+				}
 			}
 
-			conn.Close()
 			fmt.Println("disconnect  ****** ", j)
 
 		}(j)
@@ -35,4 +43,9 @@ func main() {
 	}
 
 	time.Sleep(5 * time.Minute)
+}
+
+func connect() (*net.TCPConn, error) {
+	tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
+	return net.DialTCP("tcp", nil, tcpAddr)
 }

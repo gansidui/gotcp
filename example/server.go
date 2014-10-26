@@ -12,22 +12,46 @@ import (
 	"time"
 )
 
+// count
+var connectNum, closeNum, messageNum, ioErrorNum int
+
+type ConnDelegate struct{}
+
+func (this *ConnDelegate) OnConnect(c *gotcp.Conn) bool {
+	connectNum++
+
+	c.SetReadDeadline(5 * time.Second)
+	if p, err := c.ReadPacket(); err == nil {
+		fmt.Println("OnConnect:", p.GetLen(), p.GetType(), string(p.GetData()))
+	}
+
+	return true
+}
+
+func (this *ConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
+	fmt.Println("OnMessage:", p.GetLen(), p.GetType(), string(p.GetData()))
+	messageNum++
+
+	c.SetWriteDeadline(5 * time.Second)
+	c.WritePacket(gotcp.NewPacket(99, []byte("hello")))
+
+	c.AsyncWritePacket(gotcp.NewPacket(100, []byte("world")), 5*time.Second)
+
+	return true
+}
+
+func (this *ConnDelegate) OnClose(c *gotcp.Conn) {
+	closeNum++
+	fmt.Println("OnClose")
+}
+
+func (this *ConnDelegate) OnIOError(c *gotcp.Conn, err error) {
+	ioErrorNum++
+	fmt.Println("OnIOError:", err)
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	config := &gotcp.Config{
-		AcceptTimeout:  30 * time.Second,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		MaxPacLen:      uint32(1024),
-		RecPacBufLimit: uint32(20),
-	}
-
-	callbacks := &gotcp.Callbacks{
-		OnConnect:       onConnect,
-		OnDisconnect:    onDisconnect,
-		OnReceivePacket: onReceivePacket,
-	}
 
 	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
 	checkError(err)
@@ -35,14 +59,24 @@ func main() {
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
-	svr := gotcp.NewServer(config, callbacks)
+	config := &gotcp.Config{
+		AcceptTimeout:          5 * time.Second,
+		ReadTimeout:            5 * time.Second,
+		WriteTimeout:           5 * time.Second,
+		MaxPacketLength:        int32(2048),
+		SendPacketChanLimit:    int32(10),
+		ReceivePacketChanLimit: int32(10),
+	}
+
+	delegate := &ConnDelegate{}
+	svr := gotcp.NewServer(config, delegate)
 	go svr.Start(listener)
 
 	go func() {
 		for {
 			fmt.Println("=======num goroutine === ", runtime.NumGoroutine())
-			fmt.Println(onConnectNum, onDisconnectNum, onReceivePacketNum)
-			time.Sleep(1 * time.Second)
+			fmt.Println(connectNum, closeNum, messageNum)
+			time.Sleep(2 * time.Second)
 		}
 	}()
 
@@ -53,28 +87,8 @@ func main() {
 	svr.Stop()
 }
 
-var onConnectNum, onDisconnectNum, onReceivePacketNum int
-
 func checkError(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-}
-
-func onConnect(conn *net.TCPConn) error {
-	onConnectNum++
-	fmt.Println("onConnect", conn.RemoteAddr())
-	return nil
-}
-
-func onDisconnect(conn *net.TCPConn) {
-	onDisconnectNum++
-	fmt.Println("onDisconnect", conn.RemoteAddr())
-}
-
-func onReceivePacket(conn *net.TCPConn, pac *gotcp.Packet) error {
-	onReceivePacketNum++
-	fmt.Println("onReceivePacket", conn.RemoteAddr())
-	fmt.Println(pac.GetLen(), pac.GetType(), string(pac.GetData()))
-	return nil
 }
