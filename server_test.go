@@ -10,7 +10,7 @@ import (
 // test tips
 /******************************************************/
 
-var OnConnectInfo, OnMessageInfo, OnCloseInfo, OnIOErrorInfo string
+var OnConnectTip, OnMessageTip, OnCloseTip, OnIOErrorTip string
 
 /******************************************************/
 
@@ -24,15 +24,15 @@ func (this *Delegate) OnConnect(c *Conn) bool {
 		return false
 	}
 
-	OnConnectInfo = fmt.Sprintf("OnConnect[%v,%v,%v]", p.GetLen(), p.GetType(), string(p.GetData()))
+	OnConnectTip = fmt.Sprintf("OnConnect[%v,%v,%v]", p.GetLen(), p.GetType(), string(p.GetData()))
 
-	fmt.Printf("OnConnect[%v,%v,%v]\n", p.GetLen(), p.GetType(), string(p.GetData()))
+	fmt.Println(OnConnectTip)
 	return true
 }
 
 func (this *Delegate) OnMessage(c *Conn, p *Packet) bool {
-	OnMessageInfo = fmt.Sprintf("OnMessage[%v,%v,%v]", p.GetLen(), p.GetType(), string(p.GetData()))
-	fmt.Println(OnMessageInfo)
+	OnMessageTip = fmt.Sprintf("OnMessage[%v,%v,%v]", p.GetLen(), p.GetType(), string(p.GetData()))
+	fmt.Println(OnMessageTip)
 
 	if string(p.GetData()) == "logout" {
 		c.WritePacket(NewPacket(888, []byte("ok")))
@@ -45,15 +45,15 @@ func (this *Delegate) OnMessage(c *Conn, p *Packet) bool {
 }
 
 func (this *Delegate) OnClose(c *Conn) {
-	OnCloseInfo = fmt.Sprintf("OnClose[%v]", c.IsClosed())
-	fmt.Println(OnCloseInfo)
+	OnCloseTip = fmt.Sprintf("OnClose[%v]", c.IsClosed())
+	fmt.Println(OnCloseTip)
 }
 
 func (this *Delegate) OnIOError(c *Conn, err error) {
 	if err != nil {
-		OnIOErrorInfo = fmt.Sprintf("OnIOError[%v]", err)
+		OnIOErrorTip = fmt.Sprintf("OnIOError[%v]", err)
 	}
-	fmt.Println(OnIOErrorInfo)
+	fmt.Println(OnIOErrorTip)
 }
 
 /******************************************************/
@@ -65,14 +65,14 @@ func simulateClient(t *testing.T) {
 	// OnConnect
 	conn.Write(NewPacket(777, []byte("login")).Serialize())
 	time.Sleep(100 * time.Millisecond)
-	if OnConnectInfo != "OnConnect[13,777,login]" {
+	if OnConnectTip != "OnConnect[13,777,login]" {
 		t.Fatal()
 	}
 
 	// OnMessage
 	conn.Write(NewPacket(666, []byte("helloworld")).Serialize())
 	time.Sleep(100 * time.Millisecond)
-	if OnMessageInfo != "OnMessage[18,666,helloworld]" {
+	if OnMessageTip != "OnMessage[18,666,helloworld]" {
 		t.Fatal()
 	}
 
@@ -84,7 +84,7 @@ func simulateClient(t *testing.T) {
 	// OnClose
 	conn.Write(NewPacket(555, []byte("logout")).Serialize())
 	time.Sleep(100 * time.Millisecond)
-	if OnMessageInfo != "OnMessage[14,555,logout]" {
+	if OnMessageTip != "OnMessage[14,555,logout]" {
 		t.Fatal()
 	}
 
@@ -93,12 +93,12 @@ func simulateClient(t *testing.T) {
 		t.Fatal()
 	}
 
-	if OnCloseInfo != "OnClose[true]" {
+	if OnCloseTip != "OnClose[true]" {
 		t.Fatal()
 	}
 
 	// OnIOError
-	if OnIOErrorInfo != fmt.Sprintf("OnIOError[%v]", ReadPacketError) {
+	if OnIOErrorTip != fmt.Sprintf("OnIOError[%v]", ReadPacketError) {
 		t.Fatal()
 	}
 }
