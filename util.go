@@ -8,6 +8,7 @@ import (
 var (
 	ConnIsClosedError   = errors.New("Conn is closed")
 	WriteIsBlockedError = errors.New("Write packet is blocked")
+	ReadIsBlockedError  = errors.New("Read packet is blocked")
 	ReadPacketError     = errors.New("Read packet error")
 	PacketTooLargeError = errors.New("Packet too large")
 )

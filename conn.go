@@ -107,6 +107,38 @@ func (c *Conn) ReadPacket() (*Packet, error) {
 	return ReadPacket(c.conn, c.config.MaxPacketLength)
 }
 
+// Async read a packet, this method will never block
+func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
+	if c.IsClosed() {
+		return nil, ConnIsClosedError
+	}
+
+	if timeout == 0 {
+		select {
+		case p := <-c.receivePacketChan:
+			return p, nil
+
+		case <-c.closeChan:
+			return nil, ConnIsClosedError
+
+		default:
+			return nil, ReadIsBlockedError
+		}
+
+	} else {
+		select {
+		case p := <-c.receivePacketChan:
+			return p, nil
+
+		case <-c.closeChan:
+			return nil, ConnIsClosedError
+
+		case <-time.After(timeout):
+			return nil, ReadIsBlockedError
+		}
+	}
+}
+
 // Sync write a packet, this method will block on IO
 func (c *Conn) WritePacket(p *Packet) error {
 	if c.IsClosed() {
@@ -129,6 +161,7 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 	if timeout == 0 {
 		select {
 		case c.sendPacketChan <- p:
+			return nil
 
 		case <-c.closeChan:
 			return ConnIsClosedError
@@ -140,6 +173,7 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 	} else {
 		select {
 		case c.sendPacketChan <- p:
+			return nil
 
 		case <-c.closeChan:
 			return ConnIsClosedError
@@ -148,8 +182,6 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 			return WriteIsBlockedError
 		}
 	}
-
-	return nil
 }
 
 func (c *Conn) do() {
@@ -225,7 +257,7 @@ func (c *Conn) writeLoop() {
 func (c *Conn) handleLoop() {
 	defer func() {
 		if e := recover(); e != nil {
-			log.Printf("handlePacket panic: %v\r\n", e)
+			log.Printf("handleLoop panic: %v\r\n", e)
 		}
 		c.Close()
 		c.deliverData.waitGroup.Done()
