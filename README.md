@@ -1,4 +1,5 @@
-Gotcp is a powerful package for quickly writing tcp applications/services in golang.
+gotcp is a powerful package for quickly writing tcp applications/services in golang.
+
 
 Install the gotcp package:
 ~~~
@@ -6,6 +7,7 @@ go get github.com/gansidui/gotcp
 ~~~
 
 Create server.go file:
+
 ~~~ go
 package main
 
@@ -57,8 +59,8 @@ func main() {
 		SendPacketChanLimit:    int32(10),
 		ReceivePacketChanLimit: int32(10),
 	}
-
 	delegate := &ConnDelegate{}
+
 	svr := gotcp.NewServer(config, delegate)
 	go svr.Start(listener)
 
@@ -75,7 +77,9 @@ func checkError(err error) {
 	}
 }
 
+
 ~~~
+
 
 Run server:
 ~~~
