@@ -36,6 +36,7 @@ func (s *Server) Start(listener *net.TCPListener) {
 	log.Printf("Start listen on %v\r\n", listener.Addr())
 	s.deliverData.waitGroup.Add(1)
 	defer func() {
+		log.Printf("Stop listen on %v\r\n", listener.Addr())
 		listener.Close()
 		s.deliverData.waitGroup.Done()
 	}()
@@ -43,7 +44,6 @@ func (s *Server) Start(listener *net.TCPListener) {
 	for {
 		select {
 		case <-s.deliverData.exitChan:
-			log.Printf("Stop listen on %v\r\n", listener.Addr())
 			return
 
 		default:

@@ -200,10 +200,6 @@ func (c *Conn) readLoop() {
 		c.deliverData.waitGroup.Done()
 	}()
 
-	if !c.delegate.OnConnect(c) {
-		return
-	}
-
 	for {
 		select {
 		case <-c.deliverData.exitChan:
@@ -262,6 +258,10 @@ func (c *Conn) handleLoop() {
 		c.Close()
 		c.deliverData.waitGroup.Done()
 	}()
+
+	if !c.delegate.OnConnect(c) {
+		return
+	}
 
 	for {
 		select {
