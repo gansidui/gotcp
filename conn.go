@@ -57,7 +57,7 @@ type Config struct {
 	ReceivePacketChanLimit int32         // the limit of packet receive channel
 }
 
-func NewConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, deliverData *deliverConnData) *Conn {
+func newConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, deliverData *deliverConnData) *Conn {
 	return &Conn{
 		conn:              conn,
 		config:            config,
@@ -77,6 +77,11 @@ func (c *Conn) GetExtraData() interface{} {
 // Put extra data
 func (c *Conn) PutExtraData(data interface{}) {
 	c.extraData = data
+}
+
+// Get the raw connection to use more features
+func (c *Conn) GetRawConn() *net.TCPConn {
+	return c.conn
 }
 
 // Close the Conn
@@ -184,7 +189,7 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 	}
 }
 
-func (c *Conn) do() {
+func (c *Conn) Do() {
 	c.deliverData.waitGroup.Add(3)
 	go c.handleLoop()
 	go c.readLoop()

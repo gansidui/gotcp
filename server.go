@@ -56,7 +56,7 @@ func (s *Server) Start(listener *net.TCPListener) {
 			continue
 		}
 
-		go NewConn(conn, s.config, s.delegate, s.deliverData).do()
+		go newConn(conn, s.config, s.delegate, s.deliverData).Do()
 	}
 }
 
@@ -64,4 +64,19 @@ func (s *Server) Start(listener *net.TCPListener) {
 func (s *Server) Stop() {
 	close(s.deliverData.exitChan)
 	s.deliverData.waitGroup.Wait()
+}
+
+// Server dial to the other server
+func (s *Server) Dial(network, address string, config *Config, delegate ConnDelegate) (*Conn, error) {
+	tcpAddr, err := net.ResolveTCPAddr(network, address)
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err := net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return newConn(conn, config, delegate, s.deliverData), nil
 }
