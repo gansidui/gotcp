@@ -1,14 +1,22 @@
+gotcp
+================
+
 gotcp is a powerful package for quickly writing tcp applications/services in golang.
 
 
-Install the gotcp package:
+How to install
+================
+
 ~~~
 go get github.com/gansidui/gotcp
 ~~~
 
+How to use
+================
+
 Create server.go file:
 
-~~~ go
+~~~go
 package main
 
 import (
@@ -82,7 +90,13 @@ func checkError(err error) {
 
 
 Run server:
+
 ~~~
 go run server.go
 ~~~
 
+
+Document
+================
+
+[Go Go](http://godoc.org/github.com/gansidui/gotcp)
