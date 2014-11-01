@@ -104,8 +104,15 @@ func simulateClient(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
-	tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
-	listener, _ := net.ListenTCP("tcp", tcpAddr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
+	if err != nil {
+		t.Fatal()
+	}
+
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		t.Fatal()
+	}
 
 	config := &Config{
 		AcceptTimeout:          5 * time.Second,

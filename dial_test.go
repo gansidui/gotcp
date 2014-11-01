@@ -75,8 +75,15 @@ func (this *ClientDelegate) OnIOError(c *Conn, err error) {
 }
 
 func TestDial(t *testing.T) {
-	tcpAddr, _ := net.ResolveTCPAddr("tcp4", "127.0.0.1:8990")
-	listener, _ := net.ListenTCP("tcp", tcpAddr)
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8990")
+	if err != nil {
+		t.Fatal()
+	}
+
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		t.Fatal()
+	}
 
 	config := &Config{
 		AcceptTimeout:          5 * time.Second,
