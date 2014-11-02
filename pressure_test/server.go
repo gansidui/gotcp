@@ -89,9 +89,9 @@ func main() {
 		AcceptTimeout:          10 * time.Second,
 		ReadTimeout:            120 * time.Second,
 		WriteTimeout:           120 * time.Second,
-		MaxPacketLength:        int32(2048),
-		SendPacketChanLimit:    int32(10),
-		ReceivePacketChanLimit: int32(10),
+		MaxPacketLength:        2048,
+		SendPacketChanLimit:    10,
+		ReceivePacketChanLimit: 10,
 	}
 	delegate := &ConnDelegate{}
 

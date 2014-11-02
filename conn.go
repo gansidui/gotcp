@@ -52,9 +52,9 @@ type Config struct {
 	AcceptTimeout          time.Duration // connection accepted timeout
 	ReadTimeout            time.Duration // connection read timeout
 	WriteTimeout           time.Duration // connection write timeout
-	MaxPacketLength        int32         // the maximum length of packet
-	SendPacketChanLimit    int32         // the limit of packet send channel
-	ReceivePacketChanLimit int32         // the limit of packet receive channel
+	MaxPacketLength        uint32        // the maximum length of packet
+	SendPacketChanLimit    uint32        // the limit of packet send channel
+	ReceivePacketChanLimit uint32        // the limit of packet receive channel
 }
 
 func newConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, deliverData *deliverConnData) *Conn {
@@ -115,7 +115,7 @@ func (c *Conn) ReadPacket() (*Packet, error) {
 // Async read a packet, this method will never block
 func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
 	if c.IsClosed() {
-		return nil, ConnIsClosedError
+		return nil, ConnClosedError
 	}
 
 	if timeout == 0 {
@@ -124,10 +124,10 @@ func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
 			return p, nil
 
 		case <-c.closeChan:
-			return nil, ConnIsClosedError
+			return nil, ConnClosedError
 
 		default:
-			return nil, ReadIsBlockedError
+			return nil, ReadBlockedError
 		}
 
 	} else {
@@ -136,10 +136,10 @@ func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
 			return p, nil
 
 		case <-c.closeChan:
-			return nil, ConnIsClosedError
+			return nil, ConnClosedError
 
 		case <-time.After(timeout):
-			return nil, ReadIsBlockedError
+			return nil, ReadBlockedError
 		}
 	}
 }
@@ -147,7 +147,7 @@ func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
 // Sync write a packet, this method will block on IO
 func (c *Conn) WritePacket(p *Packet) error {
 	if c.IsClosed() {
-		return ConnIsClosedError
+		return ConnClosedError
 	}
 
 	if n, err := c.conn.Write(p.Serialize()); err != nil || n != int(p.GetLen()) {
@@ -160,7 +160,7 @@ func (c *Conn) WritePacket(p *Packet) error {
 // Async write a packet, this method will never block
 func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 	if c.IsClosed() {
-		return ConnIsClosedError
+		return ConnClosedError
 	}
 
 	if timeout == 0 {
@@ -169,10 +169,10 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 			return nil
 
 		case <-c.closeChan:
-			return ConnIsClosedError
+			return ConnClosedError
 
 		default:
-			return WriteIsBlockedError
+			return WriteBlockedError
 		}
 
 	} else {
@@ -181,10 +181,10 @@ func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
 			return nil
 
 		case <-c.closeChan:
-			return ConnIsClosedError
+			return ConnClosedError
 
 		case <-time.After(timeout):
-			return WriteIsBlockedError
+			return WriteBlockedError
 		}
 	}
 }

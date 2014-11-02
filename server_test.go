@@ -118,9 +118,9 @@ func TestServer(t *testing.T) {
 		AcceptTimeout:          5 * time.Second,
 		ReadTimeout:            5 * time.Second,
 		WriteTimeout:           5 * time.Second,
-		MaxPacketLength:        int32(2048),
-		SendPacketChanLimit:    int32(10),
-		ReceivePacketChanLimit: int32(10),
+		MaxPacketLength:        2048,
+		SendPacketChanLimit:    10,
+		ReceivePacketChanLimit: 10,
 	}
 	delegate := &Delegate{}
 
