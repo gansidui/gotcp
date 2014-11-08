@@ -16,9 +16,9 @@ go get github.com/gansidui/gotcp
 
 ###Examples
 
-* [Echo](https://github.com/gansidui/gotcp/examples/tree/master/echo)
-* [ChatRoom](https://github.com/gansidui/gotcp/examples/tree/master/chatroom)
-* [Pressure-Test](https://github.com/gansidui/gotcp/examples/tree/master/pressure-test)
+* [Echo](https://github.com/gansidui/gotcp/tree/master/examples/echo)
+* [ChatRoom](https://github.com/gansidui/gotcp/tree/master/examples/chatroom)
+* [Pressure-Test](https://github.com/gansidui/gotcp/tree/master/examples/pressure-test)
 
 Document
 ================
