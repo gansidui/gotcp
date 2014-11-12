@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/gansidui/gotcp"
+	"github.com/gansidui/gotcp/examples/telnet"
 	"log"
 	"net"
 	"os"
@@ -22,8 +23,8 @@ func (this *ConnDelegate) OnConnect(c *gotcp.Conn) bool {
 }
 
 func (this *ConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
-	fmt.Println("OnMessage:", p.GetLen(), p.GetType(), string(p.GetData()))
-	c.AsyncWritePacket(gotcp.NewPacket(200, []byte("reply ok")), 5*time.Second)
+	fmt.Println("OnMessage:", p.GetLen(), p.GetTypeInt(), string(p.GetData()))
+	c.AsyncWritePacket(echo.NewPacket(200, []byte("reply ok")), 5*time.Second)
 	return true
 }
 
@@ -59,9 +60,10 @@ func main() {
 		ReceivePacketChanLimit: 10,
 	}
 	delegate := &ConnDelegate{}
+	protocol := &echo.LtvProtocol{}
 
 	// start server
-	svr := gotcp.NewServer(config, delegate)
+	svr := gotcp.NewServer(config, delegate, protocol)
 	go svr.Start(listener)
 
 	// catch signal

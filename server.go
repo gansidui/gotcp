@@ -11,6 +11,7 @@ import (
 type Server struct {
 	config      *Config          // configure infomation
 	delegate    ConnDelegate     // conn delegate(message callbacks)
+	protocol    Protocol         // data protocol
 	deliverData *deliverConnData // deliver to conn
 }
 
@@ -20,10 +21,11 @@ type deliverConnData struct {
 	waitGroup *sync.WaitGroup // wait for all goroutines
 }
 
-func NewServer(config *Config, delegate ConnDelegate) *Server {
+func NewServer(config *Config, delegate ConnDelegate, protocol Protocol) *Server {
 	return &Server{
 		config:   config,
 		delegate: delegate,
+		protocol: protocol,
 		deliverData: &deliverConnData{
 			exitChan:  make(chan struct{}),
 			waitGroup: &sync.WaitGroup{},
@@ -56,7 +58,7 @@ func (s *Server) Start(listener *net.TCPListener) {
 			continue
 		}
 
-		go newConn(conn, s.config, s.delegate, s.deliverData).Do()
+		go newConn(conn, s.config, s.delegate, s.protocol, s.deliverData).Do()
 	}
 }
 
@@ -67,7 +69,7 @@ func (s *Server) Stop() {
 }
 
 // Server dial to the other server
-func (s *Server) Dial(network, address string, config *Config, delegate ConnDelegate) (*Conn, error) {
+func (s *Server) Dial(network, address string, config *Config, delegate ConnDelegate, protocol Protocol) (*Conn, error) {
 	tcpAddr, err := net.ResolveTCPAddr(network, address)
 	if err != nil {
 		return nil, err
@@ -78,5 +80,5 @@ func (s *Server) Dial(network, address string, config *Config, delegate ConnDele
 		return nil, err
 	}
 
-	return newConn(conn, config, delegate, s.deliverData), nil
+	return newConn(conn, config, delegate, protocol, s.deliverData), nil
 }
