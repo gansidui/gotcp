@@ -14,10 +14,11 @@ func main() {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
 
+	ltvProtocol := &echo.LtvProtocol{}
+
 	for i := 0; i < 3; i++ {
 		conn.Write(echo.NewPacket(999, []byte("hello world")).Serialize())
 
-		ltvProtocol := new(echo.LtvProtocol)
 		p, err := ltvProtocol.ReadPacket(conn, 1024)
 		if err == nil {
 			fmt.Println(p.GetLen(), p.GetTypeInt(), string(p.GetData()))

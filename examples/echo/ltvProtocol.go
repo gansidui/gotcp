@@ -7,7 +7,7 @@ import (
 )
 
 // Packet: pacLen + pacType + pacData
-// Big endian: int32 + int32 + []byte
+// Big endian: uint32 + uint32 + []byte
 type LtvPacketDelegate struct {
 	pacLen  uint32
 	pacType uint32
