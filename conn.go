@@ -16,6 +16,7 @@ type Conn struct {
 	conn        *net.TCPConn     // the raw TCPConn
 	config      *Config          // configure information
 	delegate    ConnDelegate     // callbacks in Conn
+	protocol    Protocol         // data protocol
 	deliverData *deliverConnData // server delivery deliverConnData to the connection to control
 
 	extraData interface{} // save the extra data with conn
@@ -57,11 +58,12 @@ type Config struct {
 	ReceivePacketChanLimit uint32        // the limit of packet receive channel
 }
 
-func newConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, deliverData *deliverConnData) *Conn {
+func newConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, protocol Protocol, deliverData *deliverConnData) *Conn {
 	return &Conn{
 		conn:              conn,
 		config:            config,
 		delegate:          delegate,
+		protocol:          protocol,
 		deliverData:       deliverData,
 		closeChan:         make(chan struct{}),
 		sendPacketChan:    make(chan *Packet, config.SendPacketChanLimit),
@@ -109,7 +111,7 @@ func (c *Conn) IsClosed() bool {
 
 // Sync read a packet, this method will block on IO
 func (c *Conn) ReadPacket() (*Packet, error) {
-	return ReadPacket(c.conn, c.config.MaxPacketLength)
+	return c.protocol.ReadPacket(c.conn, c.config.MaxPacketLength)
 }
 
 // Async read a packet, this method will never block
@@ -151,7 +153,7 @@ func (c *Conn) WritePacket(p *Packet) error {
 	}
 
 	if n, err := c.conn.Write(p.Serialize()); err != nil || n != int(p.GetLen()) {
-		return errors.New(fmt.Sprintf("Write error: [%v], n[%v], p.pacLen[%v]", err, n, p.pacLen))
+		return errors.New(fmt.Sprintf("Write error: [%v], n[%v], p len[%v]", err, n, p.GetLen()))
 	}
 
 	return nil
@@ -218,7 +220,7 @@ func (c *Conn) readLoop() {
 
 		c.conn.SetReadDeadline(time.Now().Add(c.config.ReadTimeout))
 
-		recPacket, err := ReadPacket(c.conn, c.config.MaxPacketLength)
+		recPacket, err := c.ReadPacket()
 		if err != nil {
 			c.delegate.OnIOError(c, err)
 			return
