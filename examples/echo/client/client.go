@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/gansidui/gotcp"
+	"github.com/gansidui/gotcp/examples/echo"
 	"log"
 	"net"
 	"time"
@@ -15,11 +15,12 @@ func main() {
 	checkError(err)
 
 	for i := 0; i < 3; i++ {
-		conn.Write(gotcp.NewPacket(999, []byte("hello world")).Serialize())
+		conn.Write(echo.NewPacket(999, []byte("hello world")).Serialize())
 
-		p, err := gotcp.ReadPacket(conn, 1024)
+		ltvProtocol := new(echo.LtvProtocol)
+		p, err := ltvProtocol.ReadPacket(conn, 1024)
 		if err == nil {
-			fmt.Println(p.GetLen(), p.GetType(), string(p.GetData()))
+			fmt.Println(p.GetLen(), p.GetTypeInt(), string(p.GetData()))
 		}
 
 		time.Sleep(3 * time.Second)
