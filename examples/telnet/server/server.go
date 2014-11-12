@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gansidui/gotcp"
 	"github.com/gansidui/gotcp/examples/telnet"
 	"log"
@@ -13,39 +12,11 @@ import (
 	"time"
 )
 
-type ConnDelegate struct{}
-
-func (this *ConnDelegate) OnConnect(c *gotcp.Conn) bool {
-	addr := c.GetRawConn().RemoteAddr()
-	fmt.Println("OnConnect:", addr)
-	c.PutExtraData(addr)
-	return true
-}
-
-func (this *ConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
-	fmt.Println("OnMessage:", p.GetLen(), p.GetTypeInt(), string(p.GetData()))
-	c.AsyncWritePacket(echo.NewPacket(200, []byte("reply ok")), 5*time.Second)
-	return true
-}
-
-func (this *ConnDelegate) OnClose(c *gotcp.Conn) {
-	if extraData := c.GetExtraData(); extraData != nil {
-		fmt.Println("OnClose:", c.GetExtraData())
-	}
-
-}
-
-func (this *ConnDelegate) OnIOError(c *gotcp.Conn, err error) {
-	if extraData := c.GetExtraData(); extraData != nil {
-		fmt.Println("OnIOError:", c.GetExtraData(), err)
-	}
-}
-
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	// listen
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:23")
 	checkError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
@@ -53,14 +24,14 @@ func main() {
 	// set config and delegate
 	config := &gotcp.Config{
 		AcceptTimeout:          10 * time.Second,
-		ReadTimeout:            120 * time.Second,
-		WriteTimeout:           120 * time.Second,
+		ReadTimeout:            60 * 10 * time.Second,
+		WriteTimeout:           60 * 10 * time.Second,
 		MaxPacketLength:        2048,
 		SendPacketChanLimit:    10,
 		ReceivePacketChanLimit: 10,
 	}
-	delegate := &ConnDelegate{}
-	protocol := &echo.LtvProtocol{}
+	delegate := &telnet.TelnetConnDelegate{}
+	protocol := &telnet.TelnetProtocol{}
 
 	// start server
 	svr := gotcp.NewServer(config, delegate, protocol)

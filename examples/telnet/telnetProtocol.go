@@ -1,22 +1,27 @@
 package telnet
 
 import (
+	"bytes"
 	"fmt"
 	"io"
-	//"time"
+	"strings"
 
 	"github.com/gansidui/gotcp"
 )
 
 // Packet
 type TelnetPacketDelegate struct {
-	pLen  uint32
-	pType uint32
-	pData []byte
+	pLen        uint32
+	pType       uint32
+	pTypeString string
+	pData       []byte
 }
 
 func (p *TelnetPacketDelegate) Serialize() []byte {
-	return p.pData
+	buf := p.pData
+	endTag := []byte("\r\n")
+	buf = append(buf, endTag...)
+	return buf
 }
 
 func (p *TelnetPacketDelegate) GetLen() uint32 {
@@ -28,7 +33,7 @@ func (p *TelnetPacketDelegate) GetTypeInt() uint32 {
 }
 
 func (p *TelnetPacketDelegate) GetTypeString() string {
-	return ""
+	return p.pTypeString
 }
 
 func (p *TelnetPacketDelegate) GetData() []byte {
@@ -45,79 +50,90 @@ func NewPacket(pType uint32, pData []byte) *gotcp.Packet {
 	return packet
 }
 
-type MosProtocol struct {
+func NewPacket2(pTypeString string, pData []byte) *gotcp.Packet {
+	packet := new(gotcp.Packet)
+	packet.Delegate = &TelnetPacketDelegate{
+		pLen:        uint32(len(pData)),
+		pTypeString: pTypeString,
+		pData:       pData,
+	}
+	return packet
 }
 
-func converUtf16ToUtf8(sourceData []byte) []byte {
-	utils.InformationalWithFormat("原始mos_Data:% X", sourceData)
-	d := mahonia.NewDecoder("UTF-16")
-	if d == nil {
-		utils.Critical("Could not create decoder for UTF-16")
-		return nil
-	}
-
-	_, data, err := d.Translate(sourceData, true)
-	if err != nil {
-		utils.Critical(err.Error())
-		return nil
-	}
-	return data
+type TelnetProtocol struct {
 }
 
-func (this *MosProtocol) ReadPacket(r io.Reader, MaxPacketLength uint32) (*gotcp.Packet, error) {
-	data := make([]byte, MaxPacketLength) // 设定缓存空间
+func (this *TelnetProtocol) ReadPacket(r io.Reader, MaxPacketLength uint32) (*gotcp.Packet, error) {
+	fullBuf := bytes.NewBuffer([]byte{})
+	endTag := []byte("\r\n") //Telnet command's end tag
+	for {
+		data := make([]byte, MaxPacketLength)
 
-	readLengh, err := r.Read(data)
+		readLengh, err := r.Read(data)
 
-	if err != nil { //EOF, or worse
-		return nil, err
-	}
+		if err != nil { //EOF, or worse
+			return nil, err
+		}
 
-	if readLengh == 0 { // 连接可能已被客户端关闭
-		return nil, gotcp.ReadPacketError
-	} else {
-		//return NewPacket(0, data[0:readLengh]), nil
-		return NewPacket(0, converUtf16ToUtf8(data[0:readLengh])), nil
+		if readLengh == 0 { // Connection maybe closed by the client
+			return nil, gotcp.ConnClosedError
+		} else {
+			fullBuf.Write(data[:readLengh])
+
+			index := bytes.Index(fullBuf.Bytes(), endTag)
+			if index > -1 {
+				command := fullBuf.Next(index)
+				fullBuf.Next(2)
+				//fmt.Println(string(command))
+
+				commandList := strings.Split(string(command), " ")
+				if len(commandList) > 1 {
+					return NewPacket2(commandList[0], []byte(commandList[1])), nil
+				} else {
+					return NewPacket2("unknow", command), nil
+				}
+			}
+		}
 	}
 }
 
-type MosConnDelegate struct {
+type TelnetConnDelegate struct {
 	connectCount int
 	closeCount   int
 	messageCount int
 }
 
-func (this *MosConnDelegate) OnConnect(c *gotcp.Conn) bool {
+func (this *TelnetConnDelegate) OnConnect(c *gotcp.Conn) bool {
 	this.connectCount++
 	c.PutExtraData(this.connectCount)
-
 	fmt.Printf("OnConnect[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
+
+	c.WritePacket(NewPacket(1, []byte("Welcome to this Telnet Server")))
 	return true
 }
 
-func (this *MosConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
+func (this *TelnetConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
 	fmt.Printf("OnMessage[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), string(p.GetData()))
 	this.messageCount++
-	command := string(p.GetData())
-	utils.Informational("mos:", command)
-	if !utf8.Valid(p.GetData()) {
-		utils.Informational("指令编码无效")
-		return true
+	command := p.GetData()
+	typeStr := p.GetTypeString()
+	switch typeStr {
+	case "echo":
+		c.WritePacket(NewPacket(1, command))
+	case "login":
+		c.WritePacket(NewPacket(2, []byte(string(command)+" has login")))
+	default:
+		c.WritePacket(NewPacket(0, []byte("unknow command")))
 	}
-	//utils.Informational("valid utf8:", utf8.Valid(p.GetData()))
-	utils.InformationalWithFormat("mos_Data:% X", p.GetData())
 
-	command = "<mymos>" + command + "</mymos>"
-
-	DoWork(command)
 	return true
 }
 
-func (this *MosConnDelegate) OnClose(c *gotcp.Conn) {
+func (this *TelnetConnDelegate) OnClose(c *gotcp.Conn) {
 	this.closeCount++
 	fmt.Printf("OnClose[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
 }
 
-func (this *MosConnDelegate) OnIOError(c *gotcp.Conn, err error) {
+func (this *TelnetConnDelegate) OnIOError(c *gotcp.Conn, err error) {
 	fmt.Printf("OnIOError[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), err)
 }
