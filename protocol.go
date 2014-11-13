@@ -13,7 +13,6 @@ type PacketDelegate interface {
 }
 
 type Packet struct {
-	length   int32
 	Delegate PacketDelegate
 }
 

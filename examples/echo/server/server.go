@@ -32,7 +32,6 @@ func (this *ConnDelegate) OnClose(c *gotcp.Conn) {
 	if extraData := c.GetExtraData(); extraData != nil {
 		fmt.Println("OnClose:", c.GetExtraData())
 	}
-
 }
 
 func (this *ConnDelegate) OnIOError(c *gotcp.Conn, err error) {
