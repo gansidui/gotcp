@@ -1,7 +1,7 @@
 gotcp
 ================
 
-gotcp is a powerful package for quickly writing tcp applications/services in golang.
+A Go package for quickly building tcp servers
 
 
 Usage
@@ -22,4 +22,4 @@ go get github.com/gansidui/gotcp
 Document
 ================
 
-[GoDoc](http://godoc.org/github.com/gansidui/gotcp)
+[Doc](http://godoc.org/github.com/gansidui/gotcp)

@@ -2,197 +2,150 @@ package gotcp
 
 import (
 	"errors"
-	"fmt"
-	"log"
 	"net"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Conn exposes a set of callbacks for the
-// various events that occur on a connection
+// Error type
+var (
+	ErrConnClosing   = errors.New("use of closed network connection")
+	ErrWriteBlocking = errors.New("write packet was blocking")
+	ErrReadBlocking  = errors.New("read packet was blocking")
+)
+
+// Conn exposes a set of callbacks for the various events that occur on a connection
 type Conn struct {
-	conn        *net.TCPConn     // the raw TCPConn
-	config      *Config          // configure information
-	delegate    ConnDelegate     // callbacks in Conn
-	protocol    Protocol         // data protocol
-	deliverData *deliverConnData // server delivery deliverConnData to the connection to control
-
-	extraData interface{} // save the extra data with conn
-
-	closeOnce sync.Once // close the conn, once, per instance.
-	closeFlag int32
-	closeChan chan struct{}
-
-	sendPacketChan    chan *Packet // send packet queue
-	receivePacketChan chan *Packet // receive packet queue
+	basic             *basicSrv
+	conn              *net.TCPConn // the raw connection
+	extraData         interface{}  // save the extra data
+	closeOnce         sync.Once    // close the conn, once, per instance
+	closeFlag         int32
+	closeChan         chan struct{}
+	packetSendChan    chan Packet // packet send queue
+	packetReceiveChan chan Packet // packeet receive queue
 }
 
-// ConnDelegate is an interface of methods
-// that are used as callbacks in Conn
-type ConnDelegate interface {
+// ConnCallback is an interface of methods that are used as callbacks on a connection
+type ConnCallback interface {
 	// OnConnect is called when the connection was accepted,
 	// If the return value of false is closed
 	OnConnect(*Conn) bool
 
 	// OnMessage is called when the connection receives a packet,
 	// If the return value of false is closed
-	OnMessage(*Conn, *Packet) bool
+	OnMessage(*Conn, Packet) bool
 
 	// OnClose is called when the connection closed
 	OnClose(*Conn)
-
-	// OnIOError is called when the connection experiences
-	// a low-level TCP transport error
-	OnIOError(*Conn, error)
 }
 
-// The configure of connection
-type Config struct {
-	AcceptTimeout          time.Duration // connection accepted timeout
-	ReadTimeout            time.Duration // connection read timeout
-	WriteTimeout           time.Duration // connection write timeout
-	MaxPacketLength        uint32        // the maximum length of packet
-	SendPacketChanLimit    uint32        // the limit of packet send channel
-	ReceivePacketChanLimit uint32        // the limit of packet receive channel
-}
-
-func newConn(conn *net.TCPConn, config *Config, delegate ConnDelegate, protocol Protocol, deliverData *deliverConnData) *Conn {
+func newConn(conn *net.TCPConn, basic *basicSrv) *Conn {
 	return &Conn{
+		basic:             basic,
 		conn:              conn,
-		config:            config,
-		delegate:          delegate,
-		protocol:          protocol,
-		deliverData:       deliverData,
 		closeChan:         make(chan struct{}),
-		sendPacketChan:    make(chan *Packet, config.SendPacketChanLimit),
-		receivePacketChan: make(chan *Packet, config.ReceivePacketChanLimit),
+		packetSendChan:    make(chan Packet, basic.config.PacketSendChanLimit),
+		packetReceiveChan: make(chan Packet, basic.config.PacketReceiveChanLimit),
 	}
 }
 
-// Get extra data
+// GetExtraData gets the extra data from the Conn
 func (c *Conn) GetExtraData() interface{} {
 	return c.extraData
 }
 
-// Put extra data
+// PutExtraData puts the extra data with the Conn
 func (c *Conn) PutExtraData(data interface{}) {
 	c.extraData = data
 }
 
-// Get the raw connection to use more features
+// GetRawConn returns the raw net.TCPConn from the Conn
 func (c *Conn) GetRawConn() *net.TCPConn {
 	return c.conn
 }
 
-// Close the Conn
+// Close closes the connection
 func (c *Conn) Close() {
 	c.closeOnce.Do(func() {
 		atomic.StoreInt32(&c.closeFlag, 1)
 		close(c.closeChan)
 		c.conn.Close()
-		c.delegate.OnClose(c)
+		c.basic.callback.OnClose(c)
 	})
 }
 
-func (c *Conn) SetReadDeadline(timeout time.Duration) {
-	c.conn.SetReadDeadline(time.Now().Add(timeout))
-}
-
-func (c *Conn) SetWriteDeadline(timeout time.Duration) {
-	c.conn.SetWriteDeadline(time.Now().Add(timeout))
-}
-
-// Indicates whether or not the connection is closed
+// IsClosed indicates whether or not the connection is closed
 func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closeFlag) == 1
 }
 
-// Sync read a packet, this method will block on IO
-func (c *Conn) ReadPacket() (*Packet, error) {
-	return c.protocol.ReadPacket(c.conn, c.config.MaxPacketLength)
-}
-
-// Async read a packet, this method will never block
-func (c *Conn) AsyncReadPacket(timeout time.Duration) (*Packet, error) {
+// AsyncReadPacket async reads a packet, this method will never block
+func (c *Conn) AsyncReadPacket(timeout time.Duration) (Packet, error) {
 	if c.IsClosed() {
-		return nil, ConnClosedError
+		return nil, ErrConnClosing
 	}
 
 	if timeout == 0 {
 		select {
-		case p := <-c.receivePacketChan:
+		case p := <-c.packetReceiveChan:
 			return p, nil
 
-		case <-c.closeChan:
-			return nil, ConnClosedError
-
 		default:
-			return nil, ReadBlockedError
+			return nil, ErrReadBlocking
 		}
 
 	} else {
 		select {
-		case p := <-c.receivePacketChan:
+		case p := <-c.packetReceiveChan:
 			return p, nil
 
 		case <-c.closeChan:
-			return nil, ConnClosedError
+			return nil, ErrConnClosing
 
 		case <-time.After(timeout):
-			return nil, ReadBlockedError
+			return nil, ErrReadBlocking
 		}
 	}
 }
 
-// Sync write a packet, this method will block on IO
-func (c *Conn) WritePacket(p *Packet) error {
+// AsyncWritePacket async writes a packet, this method will never block
+func (c *Conn) AsyncWritePacket(p Packet, timeout time.Duration) error {
 	if c.IsClosed() {
-		return ConnClosedError
-	}
-
-	if n, err := c.conn.Write(p.Serialize()); err != nil || n != int(p.GetLen()) {
-		return errors.New(fmt.Sprintf("Write error: [%v], n[%v], p len[%v]", err, n, p.GetLen()))
-	}
-
-	return nil
-}
-
-// Async write a packet, this method will never block
-func (c *Conn) AsyncWritePacket(p *Packet, timeout time.Duration) error {
-	if c.IsClosed() {
-		return ConnClosedError
+		return ErrConnClosing
 	}
 
 	if timeout == 0 {
 		select {
-		case c.sendPacketChan <- p:
+		case c.packetSendChan <- p:
 			return nil
 
-		case <-c.closeChan:
-			return ConnClosedError
-
 		default:
-			return WriteBlockedError
+			return ErrWriteBlocking
 		}
 
 	} else {
 		select {
-		case c.sendPacketChan <- p:
+		case c.packetSendChan <- p:
 			return nil
 
 		case <-c.closeChan:
-			return ConnClosedError
+			return ErrConnClosing
 
 		case <-time.After(timeout):
-			return WriteBlockedError
+			return ErrWriteBlocking
 		}
 	}
 }
 
+// Do it
 func (c *Conn) Do() {
-	c.deliverData.waitGroup.Add(3)
+	if !c.basic.callback.OnConnect(c) {
+		return
+	}
+
+	c.basic.waitGroup.Add(3)
 	go c.handleLoop()
 	go c.readLoop()
 	go c.writeLoop()
@@ -200,16 +153,14 @@ func (c *Conn) Do() {
 
 func (c *Conn) readLoop() {
 	defer func() {
-		if e := recover(); e != nil {
-			log.Printf("readLoop panic: %v\r\n", e)
-		}
+		recover()
 		c.Close()
-		c.deliverData.waitGroup.Done()
+		c.basic.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-c.deliverData.exitChan:
+		case <-c.basic.exitChan:
 			return
 
 		case <-c.closeChan:
@@ -218,39 +169,34 @@ func (c *Conn) readLoop() {
 		default:
 		}
 
-		c.conn.SetReadDeadline(time.Now().Add(c.config.ReadTimeout))
-
-		recPacket, err := c.ReadPacket()
+		c.conn.SetReadDeadline(time.Now().Add(c.basic.config.ReadTimeout))
+		recPacket, err := c.basic.protocol.ReadPacket(c.conn, c.basic.config.PacketSizeLimit)
 		if err != nil {
-			c.delegate.OnIOError(c, err)
 			return
 		}
 
-		c.receivePacketChan <- recPacket
+		c.packetReceiveChan <- recPacket
 	}
 }
 
 func (c *Conn) writeLoop() {
 	defer func() {
-		if e := recover(); e != nil {
-			log.Printf("writeLoop panic: %v\r\n", e)
-		}
+		recover()
 		c.Close()
-		c.deliverData.waitGroup.Done()
+		c.basic.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-c.deliverData.exitChan:
+		case <-c.basic.exitChan:
 			return
 
 		case <-c.closeChan:
 			return
 
-		case p := <-c.sendPacketChan:
-			err := c.WritePacket(p)
-			if err != nil {
-				c.delegate.OnIOError(c, err)
+		case p := <-c.packetSendChan:
+			c.conn.SetWriteDeadline(time.Now().Add(c.basic.config.WriteTimeout))
+			if _, err := c.conn.Write(p.Serialize()); err != nil {
 				return
 			}
 		}
@@ -259,27 +205,21 @@ func (c *Conn) writeLoop() {
 
 func (c *Conn) handleLoop() {
 	defer func() {
-		if e := recover(); e != nil {
-			log.Printf("handleLoop panic: %v\r\n", e)
-		}
+		recover()
 		c.Close()
-		c.deliverData.waitGroup.Done()
+		c.basic.waitGroup.Done()
 	}()
-
-	if !c.delegate.OnConnect(c) {
-		return
-	}
 
 	for {
 		select {
-		case <-c.deliverData.exitChan:
+		case <-c.basic.exitChan:
 			return
 
 		case <-c.closeChan:
 			return
 
-		case p := <-c.receivePacketChan:
-			if !c.delegate.OnMessage(c, p) {
+		case p := <-c.packetReceiveChan:
+			if !c.basic.callback.OnMessage(c, p) {
 				return
 			}
 		}
