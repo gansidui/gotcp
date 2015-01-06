@@ -1,75 +1,83 @@
 package gotcp
 
 import (
-	"log"
 	"net"
 	"sync"
 	"time"
 )
 
-// Server struct
 type Server struct {
-	config      *Config          // configure infomation
-	delegate    ConnDelegate     // conn delegate(message callbacks)
-	protocol    Protocol         // data protocol
-	deliverData *deliverConnData // deliver to conn
+	basic *basicSrv
 }
 
-// Server delivery deliverConnData to the connection to control
-type deliverConnData struct {
-	exitChan  chan struct{}   // server notify all goroutines to shutdown
+type Config struct {
+	AcceptTimeout          time.Duration // connection accepted timeout
+	ReadTimeout            time.Duration // connection read timeout
+	WriteTimeout           time.Duration // connection write timeout
+	PacketSizeLimit        uint32        // the limit of packet size
+	PacketSendChanLimit    uint32        // the limit of packet send channel
+	PacketReceiveChanLimit uint32        // the limit of packet receive channel
+}
+
+type basicSrv struct {
+	config    *Config         // server configuration
+	callback  ConnCallback    // message callbacks in connection
+	protocol  Protocol        // customize packet protocol
+	exitChan  chan struct{}   // notify all goroutines to shutdown
 	waitGroup *sync.WaitGroup // wait for all goroutines
 }
 
-func NewServer(config *Config, delegate ConnDelegate, protocol Protocol) *Server {
-	return &Server{
-		config:   config,
-		delegate: delegate,
-		protocol: protocol,
-		deliverData: &deliverConnData{
-			exitChan:  make(chan struct{}),
-			waitGroup: &sync.WaitGroup{},
-		},
+func newBasicSrv(config *Config, callback ConnCallback, protocol Protocol) *basicSrv {
+	return &basicSrv{
+		config:    config,
+		callback:  callback,
+		protocol:  protocol,
+		exitChan:  make(chan struct{}),
+		waitGroup: &sync.WaitGroup{},
 	}
 }
 
-// Start server
+// NewServer creates a new Server
+func NewServer(config *Config, callback ConnCallback, protocol Protocol) *Server {
+	basic := newBasicSrv(config, callback, protocol)
+	return &Server{basic}
+}
+
+// Start starts server
 func (s *Server) Start(listener *net.TCPListener) {
-	log.Printf("Start listen on %v\r\n", listener.Addr())
-	s.deliverData.waitGroup.Add(1)
+	s.basic.waitGroup.Add(1)
 	defer func() {
-		log.Printf("Stop listen on %v\r\n", listener.Addr())
 		listener.Close()
-		s.deliverData.waitGroup.Done()
+		s.basic.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-s.deliverData.exitChan:
+		case <-s.basic.exitChan:
 			return
 
 		default:
 		}
 
-		listener.SetDeadline(time.Now().Add(s.config.AcceptTimeout))
+		listener.SetDeadline(time.Now().Add(s.basic.config.AcceptTimeout))
 
 		conn, err := listener.AcceptTCP()
 		if err != nil {
 			continue
 		}
 
-		go newConn(conn, s.config, s.delegate, s.protocol, s.deliverData).Do()
+		go newConn(conn, s.basic).Do()
 	}
 }
 
-// Stop server
+// Stop stops server
 func (s *Server) Stop() {
-	close(s.deliverData.exitChan)
-	s.deliverData.waitGroup.Wait()
+	close(s.basic.exitChan)
+	s.basic.waitGroup.Wait()
 }
 
-// Server dial to the other server
-func (s *Server) Dial(network, address string, config *Config, delegate ConnDelegate, protocol Protocol) (*Conn, error) {
+// Dial dials to the other server
+func (s *Server) Dial(network, address string, config *Config, callback ConnCallback, protocol Protocol) (*Conn, error) {
 	tcpAddr, err := net.ResolveTCPAddr(network, address)
 	if err != nil {
 		return nil, err
@@ -80,5 +88,7 @@ func (s *Server) Dial(network, address string, config *Config, delegate ConnDele
 		return nil, err
 	}
 
-	return newConn(conn, config, delegate, protocol, s.deliverData), nil
+	basic := newBasicSrv(config, callback, protocol)
+
+	return newConn(conn, basic), nil
 }
