@@ -9,65 +9,50 @@ import (
 	"github.com/gansidui/gotcp"
 )
 
+var (
+	endTag = []byte("\r\n") //Telnet command's end tag
+)
+
 // Packet
-type TelnetPacketDelegate struct {
-	pLen        uint32
-	pType       uint32
-	pTypeString string
-	pData       []byte
+type TelnetPacket struct {
+	pLen  uint32
+	pType string
+	pData []byte
 }
 
-func (p *TelnetPacketDelegate) Serialize() []byte {
+func (p *TelnetPacket) Serialize() []byte {
 	buf := p.pData
-	endTag := []byte("\r\n")
 	buf = append(buf, endTag...)
 	return buf
 }
 
-func (p *TelnetPacketDelegate) GetLen() uint32 {
+func (p *TelnetPacket) GetLen() uint32 {
 	return p.pLen
 }
 
-func (p *TelnetPacketDelegate) GetTypeInt() uint32 {
+func (p *TelnetPacket) GetType() string {
 	return p.pType
 }
 
-func (p *TelnetPacketDelegate) GetTypeString() string {
-	return p.pTypeString
-}
-
-func (p *TelnetPacketDelegate) GetData() []byte {
+func (p *TelnetPacket) GetData() []byte {
 	return p.pData
 }
 
-func NewPacket(pType uint32, pData []byte) *gotcp.Packet {
-	packet := new(gotcp.Packet)
-	packet.Delegate = &TelnetPacketDelegate{
+func NewTelnetPacket(pType string, pData []byte) *TelnetPacket {
+	return &TelnetPacket{
 		pLen:  uint32(len(pData)),
 		pType: pType,
 		pData: pData,
 	}
-	return packet
-}
-
-func NewPacket2(pTypeString string, pData []byte) *gotcp.Packet {
-	packet := new(gotcp.Packet)
-	packet.Delegate = &TelnetPacketDelegate{
-		pLen:        uint32(len(pData)),
-		pTypeString: pTypeString,
-		pData:       pData,
-	}
-	return packet
 }
 
 type TelnetProtocol struct {
 }
 
-func (this *TelnetProtocol) ReadPacket(r io.Reader, MaxPacketLength uint32) (*gotcp.Packet, error) {
+func (this *TelnetProtocol) ReadPacket(r io.Reader, packetSizeLimit uint32) (gotcp.Packet, error) {
 	fullBuf := bytes.NewBuffer([]byte{})
-	endTag := []byte("\r\n") //Telnet command's end tag
 	for {
-		data := make([]byte, MaxPacketLength)
+		data := make([]byte, packetSizeLimit)
 
 		readLengh, err := r.Read(data)
 
@@ -76,7 +61,7 @@ func (this *TelnetProtocol) ReadPacket(r io.Reader, MaxPacketLength uint32) (*go
 		}
 
 		if readLengh == 0 { // Connection maybe closed by the client
-			return nil, gotcp.ConnClosedError
+			return nil, gotcp.ErrConnClosing
 		} else {
 			fullBuf.Write(data[:readLengh])
 
@@ -88,52 +73,60 @@ func (this *TelnetProtocol) ReadPacket(r io.Reader, MaxPacketLength uint32) (*go
 
 				commandList := strings.Split(string(command), " ")
 				if len(commandList) > 1 {
-					return NewPacket2(commandList[0], []byte(commandList[1])), nil
+					return NewTelnetPacket(commandList[0], []byte(commandList[1])), nil
 				} else {
-					return NewPacket2("unknow", command), nil
+					if commandList[0] == "quit" {
+						return NewTelnetPacket("quit", command), nil
+					} else {
+						return NewTelnetPacket("unknow", command), nil
+					}
 				}
 			}
 		}
 	}
 }
 
-type TelnetConnDelegate struct {
+type TelnetCallback struct {
 	connectCount int
 	closeCount   int
 	messageCount int
 }
 
-func (this *TelnetConnDelegate) OnConnect(c *gotcp.Conn) bool {
+func (this *TelnetCallback) OnConnect(c *gotcp.Conn) bool {
 	this.connectCount++
 	c.PutExtraData(this.connectCount)
 	fmt.Printf("OnConnect[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
 
-	c.WritePacket(NewPacket(1, []byte("Welcome to this Telnet Server")))
+	c.AsyncWritePacket(NewTelnetPacket("unknow", []byte("Welcome to this Telnet Server")), 0)
 	return true
 }
 
-func (this *TelnetConnDelegate) OnMessage(c *gotcp.Conn, p *gotcp.Packet) bool {
-	fmt.Printf("OnMessage[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), string(p.GetData()))
+func (this *TelnetCallback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
+	packet := p.(*TelnetPacket)
+
+	fmt.Printf("OnMessage[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), string(packet.GetData()))
 	this.messageCount++
-	command := p.GetData()
-	typeStr := p.GetTypeString()
-	switch typeStr {
+	command := packet.GetData()
+	commandType := packet.GetType()
+	switch commandType {
 	case "echo":
-		c.WritePacket(NewPacket(1, command))
+		c.AsyncWritePacket(NewTelnetPacket("echo", command), 0)
 	case "login":
-		c.WritePacket(NewPacket(2, []byte(string(command)+" has login")))
+		c.AsyncWritePacket(NewTelnetPacket("login", []byte(string(command)+" has login")), 0)
+	case "quit":
+		return false
 	default:
-		c.WritePacket(NewPacket(0, []byte("unknow command")))
+		c.AsyncWritePacket(NewTelnetPacket("unknow", []byte("unknow command")), 0)
 	}
 
 	return true
 }
 
-func (this *TelnetConnDelegate) OnClose(c *gotcp.Conn) {
+func (this *TelnetCallback) OnClose(c *gotcp.Conn) {
 	this.closeCount++
 	fmt.Printf("OnClose[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
 }
 
-func (this *TelnetConnDelegate) OnIOError(c *gotcp.Conn, err error) {
-	fmt.Printf("OnIOError[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), err)
-}
+//func (this *TelnetConnDelegate) OnIOError(c *gotcp.Conn, err error) {
+//	fmt.Printf("OnIOError[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), err)
+//}
