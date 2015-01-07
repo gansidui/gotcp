@@ -26,7 +26,7 @@ func (this *LfpPacket) GetBuffer() []byte {
 
 func NewLfpPacket(buffer []byte) *LfpPacket {
 	return &LfpPacket{
-		length: len(buffer),
+		length: uint16(len(buffer)),
 		buffer: buffer,
 	}
 }
@@ -44,7 +44,7 @@ func (this *LfpProtocol) ReadPacket(r io.Reader, packetSizeLimit uint32) (gotcp.
 	if _, err := io.ReadFull(r, lengthBytes); err != nil {
 		return nil, ErrReadPacket
 	}
-	if length = BytesToUint16(lengthBytes); length > packetSizeLimit {
+	if length = BytesToUint16(lengthBytes); uint32(length) > packetSizeLimit {
 		return nil, ErrPacketTooLarger
 	}
 
