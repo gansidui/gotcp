@@ -28,15 +28,14 @@ func (this *Callback) OnConnect(c *gotcp.Conn) bool {
 func (this *Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 	lfpPacket := p.(*protocol.LfpPacket)
 
-	message := lfpPacket.GetBuffer()
-	fmt.Println("OnMessage:", string(message))
+	fmt.Printf("OnMessage:[%v] [%v]\n", lfpPacket.GetLength(), string(lfpPacket.GetBody()))
 
-	if bytes.Equal(message, []byte("bye")) {
+	if bytes.Equal(lfpPacket.GetBody(), []byte("bye")) {
 		fmt.Println("bye bye", c.GetExtraData())
 		return false
 	}
 
-	c.AsyncWritePacket(protocol.NewLfpPacket([]byte("welcome")), time.Second)
+	c.AsyncWritePacket(protocol.NewLfpPacket([]byte("welcome"), false), time.Second)
 
 	return true
 }

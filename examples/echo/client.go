@@ -20,20 +20,19 @@ func main() {
 
 	// ping <--> pong
 	for i := 0; i < 3; i++ {
-		conn.Write(protocol.NewLfpPacket([]byte("hello")).Serialize())
+		conn.Write(protocol.NewLfpPacket([]byte("hello"), false).Serialize())
 
 		p, err := LfpProtocol.ReadPacket(conn, 1024)
 		if err == nil {
 			lfpPacket := p.(*protocol.LfpPacket)
-			message := lfpPacket.GetBuffer()
-			fmt.Println("Server reply:", string(message))
+			fmt.Printf("Server reply:[%v] [%v]\n", lfpPacket.GetLength(), string(lfpPacket.GetBody()))
 		}
 
 		time.Sleep(2 * time.Second)
 	}
 
 	// bye bye
-	conn.Write(protocol.NewLfpPacket([]byte("bye")).Serialize())
+	conn.Write(protocol.NewLfpPacket([]byte("bye"), false).Serialize())
 
 	time.Sleep(5 * time.Second)
 
