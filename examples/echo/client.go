@@ -16,24 +16,23 @@ func main() {
 	conn, err := net.DialTCP("tcp", nil, tcpAddr)
 	checkError(err)
 
-	ltvProtocol := &protocol.LtvProtocol{}
+	LfpProtocol := &protocol.LfpProtocol{}
 
 	// ping <--> pong
 	for i := 0; i < 3; i++ {
-		conn.Write(protocol.NewLtvPacket(123, []byte("hello")).Serialize())
+		conn.Write(protocol.NewLfpPacket([]byte("hello"), false).Serialize())
 
-		p, err := ltvProtocol.ReadPacket(conn, 1024)
+		p, err := LfpProtocol.ReadPacket(conn, 1024)
 		if err == nil {
-			ltvPacket := p.(*protocol.LtvPacket)
-			fmt.Println("Server reply:", ltvPacket.GetLen(), ltvPacket.GetType(),
-				string(ltvPacket.GetValue()))
+			lfpPacket := p.(*protocol.LfpPacket)
+			fmt.Printf("Server reply:[%v] [%v]\n", lfpPacket.GetLength(), string(lfpPacket.GetBody()))
 		}
 
 		time.Sleep(2 * time.Second)
 	}
 
 	// bye bye
-	conn.Write(protocol.NewLtvPacket(88, []byte("hello")).Serialize())
+	conn.Write(protocol.NewLfpPacket([]byte("bye"), false).Serialize())
 
 	time.Sleep(5 * time.Second)
 

@@ -7,28 +7,36 @@ import (
 )
 
 // packet: the length value is prepended as a binary form. (length field prepender)
-// total length = 2 + len(buffer) = 2 + length
+// total length = len(buffer) = lengthBytes + body
 type LfpPacket struct {
-	length uint16
 	buffer []byte
 }
 
 func (this *LfpPacket) Serialize() []byte {
-	buf := make([]byte, 2+len(this.buffer))
-	copy(buf[0:2], Uint16ToBytes(this.length))
-	copy(buf[2:], this.buffer)
-	return buf
-}
-
-func (this *LfpPacket) GetBuffer() []byte {
 	return this.buffer
 }
 
-func NewLfpPacket(buffer []byte) *LfpPacket {
-	return &LfpPacket{
-		length: len(buffer),
-		buffer: buffer,
+func (this *LfpPacket) GetLength() uint32 {
+	return BytesToUint32(this.buffer[0:4])
+}
+
+func (this *LfpPacket) GetBody() []byte {
+	return this.buffer[4:]
+}
+
+func NewLfpPacket(buffer []byte, lenFieldFlag bool) *LfpPacket {
+	pac := &LfpPacket{}
+
+	if lenFieldFlag {
+		pac.buffer = buffer
+
+	} else {
+		pac.buffer = make([]byte, 4+len(buffer))
+		copy(pac.buffer[0:4], Uint32ToBytes(uint32(len(buffer))))
+		copy(pac.buffer[4:], buffer)
 	}
+
+	return pac
 }
 
 type LfpProtocol struct {
@@ -36,23 +44,24 @@ type LfpProtocol struct {
 
 func (this *LfpProtocol) ReadPacket(r io.Reader, packetSizeLimit uint32) (gotcp.Packet, error) {
 	var (
-		lengthBytes []byte = make([]byte, 2)
-		length      uint16
+		lengthBytes []byte = make([]byte, 4)
+		length      uint32
 	)
 
 	// read length
 	if _, err := io.ReadFull(r, lengthBytes); err != nil {
 		return nil, ErrReadPacket
 	}
-	if length = BytesToUint16(lengthBytes); length > packetSizeLimit {
+	if length = BytesToUint32(lengthBytes); length > packetSizeLimit {
 		return nil, ErrPacketTooLarger
 	}
 
-	// read buffer
-	buffer := make([]byte, length)
-	if _, err := io.ReadFull(r, buffer); err != nil {
+	// read body ( buffer = lengthBytes + body )
+	buffer := make([]byte, 4+length)
+	copy(buffer[0:4], lengthBytes)
+	if _, err := io.ReadFull(r, buffer[4:]); err != nil {
 		return nil, ErrReadPacket
 	}
 
-	return NewLfpPacket(buffer), nil
+	return NewLfpPacket(buffer, true), nil
 }

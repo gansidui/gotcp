@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -25,17 +26,16 @@ func (this *Callback) OnConnect(c *gotcp.Conn) bool {
 }
 
 func (this *Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
-	ltvPacket := p.(*protocol.LtvPacket)
+	lfpPacket := p.(*protocol.LfpPacket)
 
-	fmt.Println("OnMessage:", ltvPacket.GetLen(), ltvPacket.GetType(),
-		string(ltvPacket.GetValue()))
+	fmt.Printf("OnMessage:[%v] [%v]\n", lfpPacket.GetLength(), string(lfpPacket.GetBody()))
 
-	if ltvPacket.GetType() == 88 {
+	if bytes.Equal(lfpPacket.GetBody(), []byte("bye")) {
 		fmt.Println("bye bye", c.GetExtraData())
 		return false
 	}
 
-	c.AsyncWritePacket(protocol.NewLtvPacket(200, []byte("welcome")), 0)
+	c.AsyncWritePacket(protocol.NewLfpPacket([]byte("welcome"), false), time.Second)
 
 	return true
 }
@@ -62,7 +62,7 @@ func main() {
 		PacketSendChanLimit:    20,
 		PacketReceiveChanLimit: 20,
 	}
-	srv := gotcp.NewServer(config, &Callback{}, &protocol.LtvProtocol{})
+	srv := gotcp.NewServer(config, &Callback{}, &protocol.LfpProtocol{})
 
 	// start server
 	go srv.Start(listener)
