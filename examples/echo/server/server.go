@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -12,7 +11,7 @@ import (
 	"time"
 
 	"github.com/gansidui/gotcp"
-	"github.com/gansidui/gotcp/protocol"
+	"github.com/gansidui/gotcp/examples/echo"
 )
 
 type Callback struct{}
@@ -21,22 +20,13 @@ func (this *Callback) OnConnect(c *gotcp.Conn) bool {
 	addr := c.GetRawConn().RemoteAddr()
 	c.PutExtraData(addr)
 	fmt.Println("OnConnect:", addr)
-
 	return true
 }
 
 func (this *Callback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
-	lfpPacket := p.(*protocol.LfpPacket)
-
-	fmt.Printf("OnMessage:[%v] [%v]\n", lfpPacket.GetLength(), string(lfpPacket.GetBody()))
-
-	if bytes.Equal(lfpPacket.GetBody(), []byte("bye")) {
-		fmt.Println("bye bye", c.GetExtraData())
-		return false
-	}
-
-	c.AsyncWritePacket(protocol.NewLfpPacket([]byte("welcome"), false), time.Second)
-
+	echoPacket := p.(*echo.EchoPacket)
+	fmt.Printf("OnMessage:[%v] [%v]\n", echoPacket.GetLength(), string(echoPacket.GetBody()))
+	c.AsyncWritePacket(echo.NewEchoPacket(echoPacket.Serialize(), true), time.Second)
 	return true
 }
 
@@ -47,33 +37,29 @@ func (this *Callback) OnClose(c *gotcp.Conn) {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// create a listener
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8989")
+	// creates a tcp listener
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":8989")
 	checkError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
-	// initialize server params
+	// creates a server
 	config := &gotcp.Config{
-		AcceptTimeout:          5 * time.Second,
-		ReadTimeout:            240 * time.Second,
-		WriteTimeout:           240 * time.Second,
-		PacketSizeLimit:        2048,
 		PacketSendChanLimit:    20,
 		PacketReceiveChanLimit: 20,
 	}
-	srv := gotcp.NewServer(config, &Callback{}, &protocol.LfpProtocol{})
+	srv := gotcp.NewServer(config, &Callback{}, &echo.EchoProtocol{})
 
-	// start server
-	go srv.Start(listener)
+	// starts service
+	go srv.Start(listener, time.Second)
 	fmt.Println("listening:", listener.Addr())
 
-	// catch system signal
+	// catchs system signal
 	chSig := make(chan os.Signal)
 	signal.Notify(chSig, syscall.SIGINT, syscall.SIGTERM)
 	fmt.Println("Signal: ", <-chSig)
 
-	// stop server
+	// stops service
 	srv.Stop()
 }
 

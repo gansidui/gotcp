@@ -1,7 +1,7 @@
 package gotcp
 
 import (
-	"io"
+	"net"
 )
 
 type Packet interface {
@@ -9,5 +9,5 @@ type Packet interface {
 }
 
 type Protocol interface {
-	ReadPacket(r io.Reader, packetSizeLimit uint32) (Packet, error)
+	ReadPacket(conn *net.TCPConn) (Packet, error)
 }

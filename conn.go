@@ -17,14 +17,14 @@ var (
 
 // Conn exposes a set of callbacks for the various events that occur on a connection
 type Conn struct {
-	basic             *basicSrv
-	conn              *net.TCPConn // the raw connection
-	extraData         interface{}  // save the extra data
-	closeOnce         sync.Once    // close the conn, once, per instance
-	closeFlag         int32
-	closeChan         chan struct{}
-	packetSendChan    chan Packet // packet send queue
-	packetReceiveChan chan Packet // packeet receive queue
+	srv               *Server
+	conn              *net.TCPConn  // the raw connection
+	extraData         interface{}   // to save extra data
+	closeOnce         sync.Once     // close the conn, once, per instance
+	closeFlag         int32         // close flag
+	closeChan         chan struct{} // close chanel
+	packetSendChan    chan Packet   // packet send chanel
+	packetReceiveChan chan Packet   // packeet receive chanel
 }
 
 // ConnCallback is an interface of methods that are used as callbacks on a connection
@@ -41,13 +41,14 @@ type ConnCallback interface {
 	OnClose(*Conn)
 }
 
-func newConn(conn *net.TCPConn, basic *basicSrv) *Conn {
+// newConn returns a wrapper of raw conn
+func newConn(conn *net.TCPConn, srv *Server) *Conn {
 	return &Conn{
-		basic:             basic,
+		srv:               srv,
 		conn:              conn,
 		closeChan:         make(chan struct{}),
-		packetSendChan:    make(chan Packet, basic.config.PacketSendChanLimit),
-		packetReceiveChan: make(chan Packet, basic.config.PacketReceiveChanLimit),
+		packetSendChan:    make(chan Packet, srv.config.PacketSendChanLimit),
+		packetReceiveChan: make(chan Packet, srv.config.PacketReceiveChanLimit),
 	}
 }
 
@@ -72,7 +73,7 @@ func (c *Conn) Close() {
 		atomic.StoreInt32(&c.closeFlag, 1)
 		close(c.closeChan)
 		c.conn.Close()
-		c.basic.callback.OnClose(c)
+		c.srv.callback.OnClose(c)
 	})
 }
 
@@ -141,26 +142,26 @@ func (c *Conn) AsyncWritePacket(p Packet, timeout time.Duration) error {
 
 // Do it
 func (c *Conn) Do() {
-	if !c.basic.callback.OnConnect(c) {
+	if !c.srv.callback.OnConnect(c) {
 		return
 	}
 
-	c.basic.waitGroup.Add(3)
 	go c.handleLoop()
 	go c.readLoop()
 	go c.writeLoop()
 }
 
 func (c *Conn) readLoop() {
+	c.srv.waitGroup.Add(1)
 	defer func() {
 		recover()
 		c.Close()
-		c.basic.waitGroup.Done()
+		c.srv.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-c.basic.exitChan:
+		case <-c.srv.exitChan:
 			return
 
 		case <-c.closeChan:
@@ -169,33 +170,32 @@ func (c *Conn) readLoop() {
 		default:
 		}
 
-		c.conn.SetReadDeadline(time.Now().Add(c.basic.config.ReadTimeout))
-		recPacket, err := c.basic.protocol.ReadPacket(c.conn, c.basic.config.PacketSizeLimit)
+		p, err := c.srv.protocol.ReadPacket(c.conn)
 		if err != nil {
 			return
 		}
 
-		c.packetReceiveChan <- recPacket
+		c.packetReceiveChan <- p
 	}
 }
 
 func (c *Conn) writeLoop() {
+	c.srv.waitGroup.Add(1)
 	defer func() {
 		recover()
 		c.Close()
-		c.basic.waitGroup.Done()
+		c.srv.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-c.basic.exitChan:
+		case <-c.srv.exitChan:
 			return
 
 		case <-c.closeChan:
 			return
 
 		case p := <-c.packetSendChan:
-			c.conn.SetWriteDeadline(time.Now().Add(c.basic.config.WriteTimeout))
 			if _, err := c.conn.Write(p.Serialize()); err != nil {
 				return
 			}
@@ -204,22 +204,23 @@ func (c *Conn) writeLoop() {
 }
 
 func (c *Conn) handleLoop() {
+	c.srv.waitGroup.Add(1)
 	defer func() {
 		recover()
 		c.Close()
-		c.basic.waitGroup.Done()
+		c.srv.waitGroup.Done()
 	}()
 
 	for {
 		select {
-		case <-c.basic.exitChan:
+		case <-c.srv.exitChan:
 			return
 
 		case <-c.closeChan:
 			return
 
 		case p := <-c.packetReceiveChan:
-			if !c.basic.callback.OnMessage(c, p) {
+			if !c.srv.callback.OnMessage(c, p) {
 				return
 			}
 		}
