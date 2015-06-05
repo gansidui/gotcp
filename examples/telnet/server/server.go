@@ -17,33 +17,29 @@ import (
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// create a listener
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:23")
+	// creates a tcp listener
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":23")
 	checkError(err)
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	checkError(err)
 
-	// initialize server params
+	// creates a server
 	config := &gotcp.Config{
-		AcceptTimeout:          10 * time.Second,
-		ReadTimeout:            60 * 10 * time.Second,
-		WriteTimeout:           60 * 10 * time.Second,
-		PacketSizeLimit:        2048,
-		PacketSendChanLimit:    10,
-		PacketReceiveChanLimit: 10,
+		PacketSendChanLimit:    20,
+		PacketReceiveChanLimit: 20,
 	}
 	srv := gotcp.NewServer(config, &telnet.TelnetCallback{}, &telnet.TelnetProtocol{})
 
-	// start server
-	go srv.Start(listener)
+	// starts service
+	go srv.Start(listener, time.Second)
 	fmt.Println("listening:", listener.Addr())
 
-	// catch system signal
+	// catchs system signal
 	chSig := make(chan os.Signal)
 	signal.Notify(chSig, syscall.SIGINT, syscall.SIGTERM)
 	fmt.Println("Signal: ", <-chSig)
 
-	// stop server
+	// stops service
 	srv.Stop()
 }
 

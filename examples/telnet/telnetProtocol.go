@@ -3,19 +3,18 @@ package telnet
 import (
 	"bytes"
 	"fmt"
-	"io"
+	"net"
 	"strings"
 
 	"github.com/gansidui/gotcp"
 )
 
 var (
-	endTag = []byte("\r\n") //Telnet command's end tag
+	endTag = []byte("\r\n") // Telnet command's end tag
 )
 
 // Packet
 type TelnetPacket struct {
-	pLen  uint32
 	pType string
 	pData []byte
 }
@@ -24,10 +23,6 @@ func (p *TelnetPacket) Serialize() []byte {
 	buf := p.pData
 	buf = append(buf, endTag...)
 	return buf
-}
-
-func (p *TelnetPacket) GetLen() uint32 {
-	return p.pLen
 }
 
 func (p *TelnetPacket) GetType() string {
@@ -40,7 +35,6 @@ func (p *TelnetPacket) GetData() []byte {
 
 func NewTelnetPacket(pType string, pData []byte) *TelnetPacket {
 	return &TelnetPacket{
-		pLen:  uint32(len(pData)),
 		pType: pType,
 		pData: pData,
 	}
@@ -49,12 +43,12 @@ func NewTelnetPacket(pType string, pData []byte) *TelnetPacket {
 type TelnetProtocol struct {
 }
 
-func (this *TelnetProtocol) ReadPacket(r io.Reader, packetSizeLimit uint32) (gotcp.Packet, error) {
+func (this *TelnetProtocol) ReadPacket(conn *net.TCPConn) (gotcp.Packet, error) {
 	fullBuf := bytes.NewBuffer([]byte{})
 	for {
-		data := make([]byte, packetSizeLimit)
+		data := make([]byte, 1024)
 
-		readLengh, err := r.Read(data)
+		readLengh, err := conn.Read(data)
 
 		if err != nil { //EOF, or worse
 			return nil, err
@@ -87,27 +81,21 @@ func (this *TelnetProtocol) ReadPacket(r io.Reader, packetSizeLimit uint32) (got
 }
 
 type TelnetCallback struct {
-	connectCount int
-	closeCount   int
-	messageCount int
 }
 
 func (this *TelnetCallback) OnConnect(c *gotcp.Conn) bool {
-	this.connectCount++
-	c.PutExtraData(this.connectCount)
-	fmt.Printf("OnConnect[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
-
+	addr := c.GetRawConn().RemoteAddr()
+	c.PutExtraData(addr)
+	fmt.Println("OnConnect:", addr)
 	c.AsyncWritePacket(NewTelnetPacket("unknow", []byte("Welcome to this Telnet Server")), 0)
 	return true
 }
 
 func (this *TelnetCallback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 	packet := p.(*TelnetPacket)
-
-	fmt.Printf("OnMessage[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), string(packet.GetData()))
-	this.messageCount++
 	command := packet.GetData()
 	commandType := packet.GetType()
+
 	switch commandType {
 	case "echo":
 		c.AsyncWritePacket(NewTelnetPacket("echo", command), 0)
@@ -123,10 +111,5 @@ func (this *TelnetCallback) OnMessage(c *gotcp.Conn, p gotcp.Packet) bool {
 }
 
 func (this *TelnetCallback) OnClose(c *gotcp.Conn) {
-	this.closeCount++
-	fmt.Printf("OnClose[%s][***%v***]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int))
+	fmt.Println("OnClose:", c.GetExtraData())
 }
-
-//func (this *TelnetConnDelegate) OnIOError(c *gotcp.Conn, err error) {
-//	fmt.Printf("OnIOError[%s][***%v***]:[%v]\n", c.GetRawConn().RemoteAddr(), c.GetExtraData().(int), err)
-//}
