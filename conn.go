@@ -72,6 +72,8 @@ func (c *Conn) Close() {
 	c.closeOnce.Do(func() {
 		atomic.StoreInt32(&c.closeFlag, 1)
 		close(c.closeChan)
+		close(c.packetSendChan)
+		close(c.packetReceiveChan)
 		c.conn.Close()
 		c.srv.callback.OnClose(c)
 	})
@@ -82,40 +84,17 @@ func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closeFlag) == 1
 }
 
-// AsyncReadPacket async reads a packet, this method will never block
-func (c *Conn) AsyncReadPacket(timeout time.Duration) (Packet, error) {
-	if c.IsClosed() {
-		return nil, ErrConnClosing
-	}
-
-	if timeout == 0 {
-		select {
-		case p := <-c.packetReceiveChan:
-			return p, nil
-
-		default:
-			return nil, ErrReadBlocking
-		}
-
-	} else {
-		select {
-		case p := <-c.packetReceiveChan:
-			return p, nil
-
-		case <-c.closeChan:
-			return nil, ErrConnClosing
-
-		case <-time.After(timeout):
-			return nil, ErrReadBlocking
-		}
-	}
-}
-
 // AsyncWritePacket async writes a packet, this method will never block
-func (c *Conn) AsyncWritePacket(p Packet, timeout time.Duration) error {
+func (c *Conn) AsyncWritePacket(p Packet, timeout time.Duration) (err error) {
 	if c.IsClosed() {
 		return ErrConnClosing
 	}
+
+	defer func() {
+		if e := recover(); e != nil {
+			err = ErrConnClosing
+		}
+	}()
 
 	if timeout == 0 {
 		select {
@@ -196,6 +175,9 @@ func (c *Conn) writeLoop() {
 			return
 
 		case p := <-c.packetSendChan:
+			if c.IsClosed() {
+				return
+			}
 			if _, err := c.conn.Write(p.Serialize()); err != nil {
 				return
 			}
@@ -220,6 +202,9 @@ func (c *Conn) handleLoop() {
 			return
 
 		case p := <-c.packetReceiveChan:
+			if c.IsClosed() {
+				return
+			}
 			if !c.srv.callback.OnMessage(c, p) {
 				return
 			}
