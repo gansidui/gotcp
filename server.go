@@ -53,6 +53,7 @@ func (s *Server) Start(listener *net.TCPListener, acceptTimeout time.Duration) {
 			continue
 		}
 
+		s.waitGroup.Add(1)
 		go newConn(conn, s).Do()
 	}
 }
