@@ -121,22 +121,19 @@ func (c *Conn) AsyncWritePacket(p Packet, timeout time.Duration) (err error) {
 
 // Do it
 func (c *Conn) Do() {
-	defer c.srv.waitGroup.Done()
 	if !c.srv.callback.OnConnect(c) {
 		return
 	}
 
-	c.srv.waitGroup.Add(3)
-	go c.handleLoop()
-	go c.readLoop()
-	go c.writeLoop()
+	asyncDo(c.handleLoop, c.srv.waitGroup)
+	asyncDo(c.readLoop, c.srv.waitGroup)
+	asyncDo(c.writeLoop, c.srv.waitGroup)
 }
 
 func (c *Conn) readLoop() {
 	defer func() {
 		recover()
 		c.Close()
-		c.srv.waitGroup.Done()
 	}()
 
 	for {
@@ -163,7 +160,6 @@ func (c *Conn) writeLoop() {
 	defer func() {
 		recover()
 		c.Close()
-		c.srv.waitGroup.Done()
 	}()
 
 	for {
@@ -189,7 +185,6 @@ func (c *Conn) handleLoop() {
 	defer func() {
 		recover()
 		c.Close()
-		c.srv.waitGroup.Done()
 	}()
 
 	for {
@@ -209,4 +204,12 @@ func (c *Conn) handleLoop() {
 			}
 		}
 	}
+}
+
+func asyncDo(fn func(), wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		fn()
+		wg.Done()
+	}()
 }
