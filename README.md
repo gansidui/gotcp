@@ -7,14 +7,14 @@ A Go package for quickly building tcp servers
 Usage
 ================
 
-###Install
+### Install
 
 ~~~
 go get github.com/gansidui/gotcp
 ~~~
 
 
-###Examples
+### Examples
 
 * [echo](https://github.com/gansidui/gotcp/tree/master/examples/echo)
 * [telnet](https://github.com/gansidui/gotcp/tree/master/examples/telnet)
