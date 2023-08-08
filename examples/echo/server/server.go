@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gansidui/gotcp"
-	"github.com/gansidui/gotcp/examples/echo"
+	"github.com/dyammarcano/gotcp"
+	"github.com/dyammarcano/gotcp/examples/echo"
 )
 
 type Callback struct{}
