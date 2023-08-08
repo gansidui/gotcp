@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/gansidui/gotcp/examples/echo"
+	"github.com/dyammarcano/gotcp/examples/echo"
 )
 
 func main() {
